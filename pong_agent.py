@@ -44,7 +44,8 @@ class PongAgent:
         self.net = net
 
     def getAction(self, observation):
-        output = self.net(observation)
+        x = torch.from_numpy(observation).view(3, 210, 160).unsqueeze(0).float()
+        output = self.net(x)
         return output.argmax().item()
 
 
