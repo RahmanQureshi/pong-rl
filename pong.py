@@ -59,7 +59,6 @@ def deep_copy_nets(target_net, net):
 
 def train(target_net, net, num_episodes=10, minibatch_size=32, target_network_update_frequency=10000):
     experiences = []
-    optimizer = optim.SGD(net.parameters(), lr=0.01)
     env = gym.make('Pong-v0')
     agent = PongAgent(net)
     optimizer = optim.SGD(net.parameters(), lr=0.01)
