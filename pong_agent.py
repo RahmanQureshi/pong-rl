@@ -25,29 +25,37 @@ class Net(nn.Module):
             num_features *= s
         return num_features
 
-def train(net, X, Y, num_epochs):
-    optimizer = optim.SGD(net.parameters(), lr=0.01)
-    for i in range(0, num_epochs):
-        optimizer.zero_grad()
-        output = net(X)
-        loss = criterion(output, Y)
-        loss.backward()
-        optimizer.step()    # Does the update
 
 class PongAgent:
     """
     Observation space: Box(210, 160, 3)
     Action space: Discrete(6)
+      0 => still
+      1 => still
+      2 => up
+      3 => down
+      4 => fast up?
+      5 => fast down?
     """
 
     def __init__(self, net):
         self.net = net
 
-    def getAction(self, observation):
-        x = torch.from_numpy(observation).view(3, 210, 160).unsqueeze(0).float()
+    def getOptimalAction(self, x):
         output = self.net(x)
         return output.argmax().item()
 
+    def getRandomAction(self):
+        return np.random.randint(0,6)
+
+    def getOptimalActionValue(self, x):
+        output = self.net(x)
+        return output.max().item()
+
+    def epsilonGreedAction(self, x, epsilon=0):
+        if np.random.uniform(0,1) <= epsilon: # with probability epsilon, pick random action
+            return self.getRandomAction()
+        return self.getOptimalAction(x) # with probability 1-epislon, pick optimal action
 
 if __name__ == "__main__":
     print("Checking if forward function works")
