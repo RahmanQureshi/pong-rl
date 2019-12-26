@@ -7,8 +7,9 @@ import torch.optim as optim
 import os
 import psutil
 
-D = 10000
+D = 10000 
 discount = 0.99
+start_learning_iteration = 10000
 
 class Experience:
 
@@ -30,6 +31,7 @@ def sample_minibatch(experiences, n):
 def print_memory_usage():
     process = psutil.Process(os.getpid())
     print("Memory usage (mb): {0}".format(process.memory_info().rss/1e6))
+
 
 def create_target(minibatch, target_net):
     y = []
@@ -69,11 +71,14 @@ def train(target_net, net, num_episodes=10, minibatch_size=32, target_network_up
     agent = PongAgent(net)
     optimizer = optim.SGD(net.parameters(), lr=0.01)
     j = 0
+    losses = []
+    iteration = 0
     for i in range(0, num_episodes):
         observation = env.reset()
         done = False
+        print("Episode: {}", i)
         while not done:
-            print("Iteration {}:".format(i*target_network_update_frequency+j))
+            print("Iteration {}:".format(iteration))
             print_memory_usage()
             epsilon = 1
             action = agent.epsilonGreedAction(observation, epsilon)
@@ -82,17 +87,21 @@ def train(target_net, net, num_episodes=10, minibatch_size=32, target_network_up
             if len(experiences) > D:
                 experiences.pop(0)
             experiences.append(experience)
-            minibatch = sample_minibatch(experiences, minibatch_size)
-            targets = create_target(minibatch, target_net)
-            optimizer.zero_grad()   # zero the gradient buffers
-            predictions = predict(minibatch, net)
-            loss = torch.sum((targets - predictions)**2)
-            loss.backward()
-            optimizer.step()
-            if j == target_network_update_frequency:
-                j = 0
-                deep_copy_nets(target_net, net)
-            j = j + 1
+            if iteration > start_learning_iteration: # only start learning after a number of experiences have been collected
+                minibatch = sample_minibatch(experiences, minibatch_size)
+                targets = create_target(minibatch, target_net)
+                optimizer.zero_grad()   # zero the gradient buffers
+                predictions = predict(minibatch, net)
+                loss = torch.sum((targets - predictions)**2)
+                losses.append(loss.item())
+                print("Loss: {}".format(loss))
+                loss.backward()
+                optimizer.step()
+                if j == target_network_update_frequency:
+                    j = 0
+                    deep_copy_nets(target_net, net)
+                j = j + 1
+            iteration = iteration + 1
     env.close()
 
 
