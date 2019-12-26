@@ -6,10 +6,13 @@ import numpy as np
 import torch.optim as optim
 import os
 import psutil
+import matplotlib.pyplot as plt
 
-D = 10000 
+D = 10000 # memory buffer size
+minibatch_size = 32
 discount = 0.99
-start_learning_iteration = 10000
+start_learning_iteration = D # start backprop after this many iterations
+plot_every_num_iterations = int(D/minibatch_size) # after this many iterations, one epoch is complete
 
 class Experience:
 
@@ -44,7 +47,7 @@ def create_target(minibatch, target_net):
     return torch.tensor(y)
 
 
-def predict(minibatch, net):
+def predictOptimalActionValues(minibatch, net):
     prediction = torch.empty(len(minibatch))
     batch_states = minibatch[0].state
     for i in range(1, len(minibatch)):
@@ -69,9 +72,10 @@ def train(target_net, net, num_episodes=10, minibatch_size=32, target_network_up
     experiences = []
     env = gym.make('Pong-v0')
     agent = PongAgent(net)
-    optimizer = optim.SGD(net.parameters(), lr=0.01)
+    optimizer = optim.SGD(net.parameters(), lr=0.001)
     j = 0
     losses = []
+    avg_optimal_action_values = []
     iteration = 0
     for i in range(0, num_episodes):
         observation = env.reset()
@@ -91,9 +95,8 @@ def train(target_net, net, num_episodes=10, minibatch_size=32, target_network_up
                 minibatch = sample_minibatch(experiences, minibatch_size)
                 targets = create_target(minibatch, target_net)
                 optimizer.zero_grad()   # zero the gradient buffers
-                predictions = predict(minibatch, net)
-                loss = torch.sum((targets - predictions)**2)
-                losses.append(loss.item())
+                predictedOptimalActionValues = predictOptimalActionValues(minibatch, net)
+                loss = torch.sum((targets - predictedOptimalActionValues)**2)
                 print("Loss: {}".format(loss))
                 loss.backward()
                 optimizer.step()
@@ -101,10 +104,21 @@ def train(target_net, net, num_episodes=10, minibatch_size=32, target_network_up
                     j = 0
                     deep_copy_nets(target_net, net)
                 j = j + 1
+                if (iteration-start_learning_iteration) % plot_every_num_iterations == 0:
+                    losses.append(loss.item())
+                    avg_optimal_action_values.append(predictedOptimalActionValues.mean().item())
+                    plt.figure(0)
+                    plt.title("loss")
+                    plt.plot(losses)
+                    plt.figure(1)
+                    plt.title("average optimal action value")
+                    plt.plot(avg_optimal_action_values)
+                    plt.show(block=False)
+                    plt.pause(1)
             iteration = iteration + 1
     env.close()
 
 
 net = Net()
 target_net = net
-train(target_net, net, 100000)
+train(target_net, net, num_episodes=100000, minibatch_size=minibatch_size)
