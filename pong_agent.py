@@ -42,14 +42,14 @@ class PongAgent:
         self.net = net
 
     def getOptimalAction(self, x):
-        output = self.net(x)
+        output = self.net(x.float())
         return output.argmax().item()
 
     def getRandomAction(self):
         return np.random.randint(0,6)
 
     def getOptimalActionValue(self, x):
-        output = self.net(x)
+        output = self.net(x.float())
         return output.max().item()
 
     def epsilonGreedAction(self, x, epsilon=0):
