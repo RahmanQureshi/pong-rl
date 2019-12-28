@@ -17,9 +17,9 @@ plot_every_num_iterations = int(D/minibatch_size) # after this many iterations, 
 class Experience:
 
     def __init__(self, state, action, result_state, reward, done):
-        self.state = torch.from_numpy(state).view(3, 210, 160).unsqueeze(0)
+        self.state = torch.from_numpy(state).view(3, 210, 160).unsqueeze(0).float()
         self.action = action
-        self.result_state = torch.from_numpy(result_state).view(3, 210, 160).unsqueeze(0)
+        self.result_state = torch.from_numpy(result_state).view(3, 210, 160).unsqueeze(0).float()
         self.reward = reward
         self.done = done
 
@@ -36,9 +36,8 @@ def print_memory_usage():
     print("Memory usage (mb): {0}".format(process.memory_info().rss/1e6))
 
 
-def create_target(minibatch, target_net):
+def create_target(minibatch, targetAgent):
     y = []
-    targetAgent = PongAgent(target_net)
     for i in range(0, len(minibatch)):
         if minibatch[i].done:
             y.append(minibatch[i].reward)
@@ -47,12 +46,14 @@ def create_target(minibatch, target_net):
     return torch.tensor(y)
 
 
-def predictOptimalActionValues(minibatch, net):
+def predictStateActionValues(minibatch, agent, device):
+    """For each experience in the minibatch, compute Q(s,a).
+    """
     prediction = torch.empty(len(minibatch))
     batch_states = minibatch[0].state
     for i in range(1, len(minibatch)):
         batch_states = torch.cat((batch_states, minibatch[i].state))
-    net_output = net(batch_states.float())
+    net_output = agent.batchPredict(batch_states)
     for i in range(0, len(minibatch)):
         prediction[i] = net_output[i][minibatch[i].action]
     return prediction
@@ -71,16 +72,18 @@ def deep_copy_nets(target_net, net):
 def train(target_net, net, num_episodes=10, minibatch_size=32, target_network_update_frequency=10000):
     experiences = []
     env = gym.make('Pong-v0')
-    agent = PongAgent(net)
     optimizer = optim.SGD(net.parameters(), lr=0.001)
     j = 0
     losses = []
-    avg_optimal_action_values = []
+    avg_action_values = []
     iteration = 0
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    agent = PongAgent(net, device)
+    targetAgent = PongAgent(target_net, device)
     for i in range(0, num_episodes):
         observation = env.reset()
         done = False
-        print("Episode: {}", i)
+        print("Episode: {}".format(i))
         while not done:
             print("Iteration {}:".format(iteration))
             print_memory_usage()
@@ -93,10 +96,10 @@ def train(target_net, net, num_episodes=10, minibatch_size=32, target_network_up
             experiences.append(experience)
             if iteration > start_learning_iteration: # only start learning after a number of experiences have been collected
                 minibatch = sample_minibatch(experiences, minibatch_size)
-                targets = create_target(minibatch, target_net)
+                targets = create_target(minibatch, targetAgent)
                 optimizer.zero_grad()   # zero the gradient buffers
-                predictedOptimalActionValues = predictOptimalActionValues(minibatch, net)
-                loss = torch.sum((targets - predictedOptimalActionValues)**2)
+                predictedStateActionValues = predictStateActionValues(minibatch, agent, device)
+                loss = torch.sum((targets - predictedStateActionValues)**2)
                 print("Loss: {}".format(loss))
                 loss.backward()
                 optimizer.step()
@@ -106,13 +109,13 @@ def train(target_net, net, num_episodes=10, minibatch_size=32, target_network_up
                 j = j + 1
                 if (iteration-start_learning_iteration) % plot_every_num_iterations == 0:
                     losses.append(loss.item())
-                    avg_optimal_action_values.append(predictedOptimalActionValues.mean().item())
+                    avg_action_values.append(predictedStateActionValues.mean().item())
                     plt.figure(0)
                     plt.title("loss")
                     plt.plot(losses)
                     plt.figure(1)
                     plt.title("average optimal action value")
-                    plt.plot(avg_optimal_action_values)
+                    plt.plot(avg_action_values)
                     plt.show(block=False)
                     plt.pause(1)
             iteration = iteration + 1

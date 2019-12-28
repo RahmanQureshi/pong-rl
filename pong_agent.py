@@ -38,24 +38,31 @@ class PongAgent:
       5 => fast down?
     """
 
-    def __init__(self, net):
+    def __init__(self, net, device):
         self.net = net
+        self.device = device
+        self.net.to(self.device)
 
     def getOptimalAction(self, x):
-        output = self.net(x.float())
+        output = self.net(x.to(self.device).float())
         return output.argmax().item()
 
     def getRandomAction(self):
         return np.random.randint(0,6)
 
     def getOptimalActionValue(self, x):
-        output = self.net(x.float())
+        output = self.net(x.to(self.device).float())
         return output.max().item()
 
     def epsilonGreedAction(self, x, epsilon=0):
         if np.random.uniform(0,1) <= epsilon: # with probability epsilon, pick random action
             return self.getRandomAction()
         return self.getOptimalAction(x) # with probability 1-epislon, pick optimal action
+
+    def batchPredict(self, batch):
+        """Training purposes only.
+        """
+        return self.net(batch.to(self.device).float())
 
 if __name__ == "__main__":
     print("Checking if forward function works")
