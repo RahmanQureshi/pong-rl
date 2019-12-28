@@ -17,12 +17,24 @@ plot_every_num_iterations = int(D/minibatch_size) # after this many iterations, 
 class Experience:
 
     def __init__(self, state, action, result_state, reward, done):
-        self.state = torch.from_numpy(state).view(3, 210, 160).unsqueeze(0)
+        self.state = torch.from_numpy(state).view(1, 210, 160).unsqueeze(0)
         self.action = action
-        self.result_state = torch.from_numpy(result_state).view(3, 210, 160).unsqueeze(0)
+        self.result_state = torch.from_numpy(result_state).view(1, 210, 160).unsqueeze(0)
         self.reward = reward
         self.done = done
 
+def perceived_brightness(r, g, b):
+   return int(0.299*r + 0.587*g + 0.114*b)
+
+def rgb_frame_to_grayscale(frame):
+    """Convert rgb to grayscale. Uses observed luminance to compute grey value.
+    Input:
+        numpy array 210x160x3
+    Returns:
+        numpy array 210x160
+    """
+    rgb = np.array([0.299, 0.587, 0.114])
+    return np.inner(rgb, frame)
 
 def sample_minibatch(experiences, n):
     minibatch = []
@@ -83,7 +95,7 @@ def train(target_net, net, num_episodes=10, minibatch_size=32, target_network_up
     agent = PongAgent(net, device)
     targetAgent = PongAgent(target_net, device)
     for i in range(0, num_episodes):
-        observation = env.reset()
+        observation = rgb_frame_to_grayscale(env.reset())
         done = False
         print("Episode: {}".format(i))
         while not done:
@@ -92,6 +104,7 @@ def train(target_net, net, num_episodes=10, minibatch_size=32, target_network_up
             # use the current observation to selection an action, run the environment, store the experience
             action = agent.epsilonGreedAction(observation, epsilon=1)
             result_observation, reward, done, info = env.step(action)
+            result_observation = rgb_frame_to_grayscale(result_observation)
             experience = Experience(observation, action, result_observation, reward, done)
             if len(experiences) > D:
                 experiences.pop(0)

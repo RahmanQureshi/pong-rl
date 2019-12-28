@@ -6,10 +6,12 @@ import numpy as np
 
 class Net(nn.Module):
 
+
     def __init__(self):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(3, 1, 5) 
+        self.conv1 = nn.Conv2d(1, 1, 5) 
         self.fc1 = nn.Linear(206 * 156, 6) 
+
 
     def forward(self, x):
         # x.size() => (210, 156)
@@ -17,6 +19,7 @@ class Net(nn.Module):
         x = x.view(-1, self.num_flat_features(x)) # size => (1, 206*156)
         x = self.fc1(x)
         return x
+
 
     def num_flat_features(self, x):
         size = x.size()[1:]  # all dimensions except the batch dimension
