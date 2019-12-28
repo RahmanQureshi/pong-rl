@@ -17,9 +17,9 @@ plot_every_num_iterations = int(D/minibatch_size) # after this many iterations, 
 class Experience:
 
     def __init__(self, state, action, result_state, reward, done):
-        self.state = torch.from_numpy(state).view(3, 210, 160).unsqueeze(0).float()
+        self.state = torch.from_numpy(state).view(3, 210, 160).unsqueeze(0)
         self.action = action
-        self.result_state = torch.from_numpy(result_state).view(3, 210, 160).unsqueeze(0).float()
+        self.result_state = torch.from_numpy(result_state).view(3, 210, 160).unsqueeze(0)
         self.reward = reward
         self.done = done
 
@@ -31,9 +31,11 @@ def sample_minibatch(experiences, n):
     return minibatch
 
 
-def print_memory_usage():
+def print_memory_usage(device):
     process = psutil.Process(os.getpid())
     print("Memory usage (mb): {0}".format(process.memory_info().rss/1e6))
+    if device.type == 'cuda':
+        print("GPU Memory Usage: {0}".format(torch.cuda.memory_allocated(device)/1e6))
 
 
 def create_target(minibatch, targetAgent):
@@ -77,7 +79,7 @@ def train(target_net, net, num_episodes=10, minibatch_size=32, target_network_up
     losses = []
     avg_action_values = []
     iteration = 0
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     agent = PongAgent(net, device)
     targetAgent = PongAgent(target_net, device)
     for i in range(0, num_episodes):
@@ -86,14 +88,16 @@ def train(target_net, net, num_episodes=10, minibatch_size=32, target_network_up
         print("Episode: {}".format(i))
         while not done:
             print("Iteration {}:".format(iteration))
-            print_memory_usage()
-            epsilon = 1
-            action = agent.epsilonGreedAction(observation, epsilon)
+            print_memory_usage(device)
+            # use the current observation to selection an action, run the environment, store the experience
+            action = agent.epsilonGreedAction(observation, epsilon=1)
             result_observation, reward, done, info = env.step(action)
             experience = Experience(observation, action, result_observation, reward, done)
             if len(experiences) > D:
                 experiences.pop(0)
             experiences.append(experience)
+            observation = result_observation
+            # once enough experiences collected, start learning
             if iteration > start_learning_iteration: # only start learning after a number of experiences have been collected
                 minibatch = sample_minibatch(experiences, minibatch_size)
                 targets = create_target(minibatch, targetAgent)
