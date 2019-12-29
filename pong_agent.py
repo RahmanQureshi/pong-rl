@@ -9,15 +9,21 @@ class Net(nn.Module):
 
     def __init__(self):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(2, 1, 5) 
-        self.fc1 = nn.Linear(206 * 156, 6) 
+        self.conv1 = nn.Conv2d(2, 32, 8, stride=4) 
+        self.conv2 = nn.Conv2d(32, 64, 4, stride=2)
+        self.conv3 = nn.Conv2d(64, 64, 3, stride=1)
+        self.fc1 = nn.Linear(64 * 22 * 16, 512) 
+        self.fc2 = nn.Linear(512, 6)
 
 
     def forward(self, x):
-        # x.size() => (210, 156)
-        x = F.relu(self.conv1(x)) # size => (206, 156)
+        # x.size() => (2, 210, 160)
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
         x = x.view(-1, self.num_flat_features(x)) # size => (1, 206*156)
-        x = self.fc1(x)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
         return x
 
 
