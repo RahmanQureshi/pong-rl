@@ -1,3 +1,6 @@
+"""Trains a neural net to play Pong.
+   Exit using Ctrl-C. This will automatically save the neural network into file net-<random string>.
+"""
 import gym
 from time import sleep
 from pong_agent import PongAgent, Net
@@ -24,6 +27,8 @@ minibatch_size = 32
 discount = 0.99
 start_learning_iteration = D # start backprop after this many iterations
 plot_every_num_iterations = int(D/minibatch_size) # after this many iterations, one epoch is complete
+target_network_update_frequency = 10000 # after learning begins, update the target network after this many iterations
+
 
 class Experience:
 
@@ -111,7 +116,7 @@ def get_sigint_handler(net):
     return sigint_handler
 
 
-def train(net, num_episodes=10, minibatch_size=32, target_network_update_frequency=10000):
+def train(net, minibatch_size=32, target_network_update_frequency=10000):
     experiences = []
     env = gym.make('Pong-v0')
     optimizer = optim.SGD(net.parameters(), lr=0.001)
@@ -125,11 +130,10 @@ def train(net, num_episodes=10, minibatch_size=32, target_network_update_frequen
     deep_copy_nets(target_net, net)
     targetAgent = PongAgent(target_net, device)
     lastMFrames = []
-    for i in range(0, num_episodes):
+    while True:
         init_frame = rgb_frame_to_grayscale(env.reset())
         observation = np.array([init_frame, init_frame])
         done = False
-        print("Episode: {}".format(i))
         while not done:
             print("Iteration {}:".format(iteration))
             print_memory_usage(device)
@@ -156,11 +160,9 @@ def train(net, num_episodes=10, minibatch_size=32, target_network_update_frequen
                 print("Loss: {}".format(loss))
                 loss.backward()
                 optimizer.step()
-                if j == target_network_update_frequency:
-                    j = 0
+                if iteration % target_network_update_frequency == 0:
                     deep_copy_nets(target_net, net)
-                j = j + 1
-                if (iteration-start_learning_iteration) % plot_every_num_iterations == 0:
+                if iteration % plot_every_num_iterations == 0:
                     losses.append(loss.item())
                     avg_action_values.append(predictedStateActionValues.mean().item())
                     plt.figure(0)
@@ -180,4 +182,4 @@ net = Net()
 if net_file != '':
     net = torch.load(net_file)
 signal(SIGINT, get_sigint_handler(net))
-train(net, num_episodes=100000, minibatch_size=minibatch_size)
+train(net, minibatch_size=minibatch_size, target_network_update_frequency=target_network_update_frequency)
