@@ -20,6 +20,8 @@ import argparse
 parser = argparse.ArgumentParser(description='Train a neural net to play pong.')
 parser.add_argument('--net_file', metavar='net_file', type=str, nargs=1, default="",
                     help='file to load the model to be trained')
+parser.add_argument('--render', default=False, action='store_true',
+                    help='Render a screen to see the net play')
 
 M = 2 # run the game M times and stack the resulting frames to produce the state
 D = 10000 # memory buffer size
@@ -160,6 +162,9 @@ def train(net, minibatch_size=32, target_network_update_frequency=10000):
                 experiences.pop(0)
             experiences.append(experience)
             observation = result_observation
+            if render:
+                env.render()
+                sleep(0.1)
             # once enough experiences collected, start learning
             if iteration > start_learning_iteration: # only start learning after a number of experiences have been collected
                 minibatch = sample_minibatch(experiences, minibatch_size)
@@ -187,9 +192,11 @@ def train(net, minibatch_size=32, target_network_update_frequency=10000):
     env.close()
 
 args = parser.parse_args()
+
 net_file = args.net_file[0] if len(args.net_file) == 1 else ''
 net = Net()
 if net_file != '':
-    net = torch.load(net_file)
+    state_dict = torch.load(net_file)
+    net.load_state_dict(state_dict)
 signal(SIGINT, get_sigint_handler(net))
 train(net, minibatch_size=minibatch_size, target_network_update_frequency=target_network_update_frequency)
