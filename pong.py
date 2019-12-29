@@ -141,7 +141,7 @@ def train(net, minibatch_size=32, target_network_update_frequency=10000):
             print("Iteration {}:".format(iteration))
             print_memory_usage(device)
             # use the current observation to selection an action, run the environment, store the experience
-            if iteration <= start_learning_iteration: # before learning, use first epsilon value
+            if iteration < start_learning_iteration: # before learning, use first epsilon value
                 epsilon = epsilons[0]
             elif iteration-start_learning_iteration < len(epsilons): # annealment
                 epsilon = epsilons[iteration-start_learning_iteration]
