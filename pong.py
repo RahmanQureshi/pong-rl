@@ -128,7 +128,6 @@ def get_sigint_handler(net, optimizer):
 def train(net, optimizer, minibatch_size=32, target_network_update_frequency=10000, render=False):
     experiences = []
     env = gym.make('Pong-v0')
-    optimizer = optim.SGD(net.parameters(), lr=0.001)
     losses = []
     avg_action_values = []
     iteration = 0
