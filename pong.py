@@ -28,14 +28,16 @@ discount = 0.99
 start_learning_iteration = D # start backprop after this many iterations
 plot_every_num_iterations = int(D/minibatch_size) # after this many iterations, one epoch is complete
 target_network_update_frequency = 10000 # after learning begins, update the target network after this many iterations
+epsilons = np.linspace(1,0.05,100000) # epsilon annealment. uses the last value after they are all used.
 
 
 class Experience:
 
+
     def __init__(self, state, action, result_state, reward, done):
-        self.state = torch.from_numpy(state).view(2, 210, 160).unsqueeze(0)
+        self.state = state
         self.action = action
-        self.result_state = torch.from_numpy(result_state).view(2, 210, 160).unsqueeze(0)
+        self.result_state = result_state
         self.reward = reward
         self.done = done
 
@@ -120,7 +122,6 @@ def train(net, minibatch_size=32, target_network_update_frequency=10000):
     experiences = []
     env = gym.make('Pong-v0')
     optimizer = optim.SGD(net.parameters(), lr=0.001)
-    j = 0
     losses = []
     avg_action_values = []
     iteration = 0
@@ -130,21 +131,30 @@ def train(net, minibatch_size=32, target_network_update_frequency=10000):
     deep_copy_nets(target_net, net)
     targetAgent = PongAgent(target_net, device)
     lastMFrames = []
+    epsilon = None
     while True:
         init_frame = rgb_frame_to_grayscale(env.reset())
         observation = np.array([init_frame, init_frame])
+        observation = torch.from_numpy(observation).view(2, 210, 160).unsqueeze(0)
         done = False
         while not done:
             print("Iteration {}:".format(iteration))
             print_memory_usage(device)
             # use the current observation to selection an action, run the environment, store the experience
-            action = agent.epsilonGreedAction(observation, epsilon=1)
+            if iteration <= start_learning_iteration: # before learning, use first epsilon value
+                epsilon = epsilons[0]
+            elif iteration-start_learning_iteration < len(epsilons): # annealment
+                epsilon = epsilons[iteration-start_learning_iteration]
+            else: # after running out of epsilons, continue to use the last one
+                epsilon = epsilons[-1]
+            action = agent.epsilonGreedAction(observation, epsilon=epsilon)
             result_observation = []
             for i in range(0, M):
                 new_frame, reward, done, info = env.step(action)
                 new_frame = rgb_frame_to_grayscale(new_frame)
                 result_observation.append(new_frame)
             result_observation = np.array(result_observation)
+            result_observation = torch.from_numpy(result_observation).view(2, 210, 160).unsqueeze(0)
             experience = Experience(observation, action, result_observation, reward, done)
             if len(experiences) > D:
                 experiences.pop(0)
