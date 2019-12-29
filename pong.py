@@ -11,7 +11,12 @@ import random
 import string
 import sys
 from signal import signal, SIGINT
+import argparse
 
+
+parser = argparse.ArgumentParser(description='Train a neural net to play pong.')
+parser.add_argument('--net_file', metavar='net_file', type=str, nargs=1, default="",
+                    help='file to load the model to be trained')
 
 M = 2 # run the game M times and stack the resulting frames to produce the state
 D = 10000 # memory buffer size
@@ -106,7 +111,7 @@ def get_sigint_handler(net):
     return sigint_handler
 
 
-def train(target_net, net, num_episodes=10, minibatch_size=32, target_network_update_frequency=10000):
+def train(net, num_episodes=10, minibatch_size=32, target_network_update_frequency=10000):
     experiences = []
     env = gym.make('Pong-v0')
     optimizer = optim.SGD(net.parameters(), lr=0.001)
@@ -116,6 +121,8 @@ def train(target_net, net, num_episodes=10, minibatch_size=32, target_network_up
     iteration = 0
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     agent = PongAgent(net, device)
+    target_net = Net()
+    deep_copy_nets(target_net, net)
     targetAgent = PongAgent(target_net, device)
     lastMFrames = []
     for i in range(0, num_episodes):
@@ -162,8 +169,10 @@ def train(target_net, net, num_episodes=10, minibatch_size=32, target_network_up
             iteration = iteration + 1
     env.close()
 
+args = parser.parse_args()
+net_file = args.net_file[0] if len(args.net_file) == 1 else ''
 net = Net()
-target_net = Net()
-deep_copy_nets(target_net, net)
+if net_file != '':
+    net = torch.load(net_file)
 signal(SIGINT, get_sigint_handler(net))
-train(target_net, net, num_episodes=100000, minibatch_size=minibatch_size)
+train(net, num_episodes=100000, minibatch_size=minibatch_size)
