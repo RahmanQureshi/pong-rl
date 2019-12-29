@@ -7,7 +7,13 @@ import torch.optim as optim
 import os
 import psutil
 import matplotlib.pyplot as plt
+import random
+import string
+import sys
+from signal import signal, SIGINT
 
+
+M = 2 # run the game M times and stack the resulting frames to produce the state
 D = 10000 # memory buffer size
 minibatch_size = 32
 discount = 0.99
@@ -72,6 +78,12 @@ def predictStateActionValues(minibatch, agent, device):
     return prediction
 
 
+def random_string(stringLength=10):
+    """Generate_sa random string of fixed length """
+    lettersAndNumbers = string.ascii_lowercase + string.digits
+    return ''.join(random.choice(lettersAndNumbers) for i in range(stringLength))
+
+
 def deep_copy_nets(target_net, net):
     """Copies parameters of net into target_net
     """
@@ -80,6 +92,18 @@ def deep_copy_nets(target_net, net):
     dict_params2 = dict(params2)
     for name1, param1 in params1:
         dict_params2[name1].data.copy_(param1.data)
+
+
+def save_net(net):
+    torch.save(net.state_dict(), "./net-" + random_string())
+
+
+def get_sigint_handler(net):
+    def sigint_handler(signal_received, frame):
+        print("saving net...")
+        save_net(net)
+        sys.exit(0)
+    return sigint_handler
 
 
 def train(target_net, net, num_episodes=10, minibatch_size=32, target_network_update_frequency=10000):
@@ -93,6 +117,7 @@ def train(target_net, net, num_episodes=10, minibatch_size=32, target_network_up
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     agent = PongAgent(net, device)
     targetAgent = PongAgent(target_net, device)
+    lastMFrames = []
     for i in range(0, num_episodes):
         observation = rgb_frame_to_grayscale(env.reset())
         done = False
@@ -137,7 +162,8 @@ def train(target_net, net, num_episodes=10, minibatch_size=32, target_network_up
             iteration = iteration + 1
     env.close()
 
-
 net = Net()
-target_net = net
+target_net = Net()
+deep_copy_nets(target_net, net)
+signal(SIGINT, get_sigint_handler(net))
 train(target_net, net, num_episodes=100000, minibatch_size=minibatch_size)
