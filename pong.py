@@ -28,9 +28,9 @@ plot_every_num_iterations = int(D/minibatch_size) # after this many iterations, 
 class Experience:
 
     def __init__(self, state, action, result_state, reward, done):
-        self.state = torch.from_numpy(state).view(1, 210, 160).unsqueeze(0)
+        self.state = torch.from_numpy(state).view(2, 210, 160).unsqueeze(0)
         self.action = action
-        self.result_state = torch.from_numpy(result_state).view(1, 210, 160).unsqueeze(0)
+        self.result_state = torch.from_numpy(result_state).view(2, 210, 160).unsqueeze(0)
         self.reward = reward
         self.done = done
 
@@ -126,7 +126,8 @@ def train(net, num_episodes=10, minibatch_size=32, target_network_update_frequen
     targetAgent = PongAgent(target_net, device)
     lastMFrames = []
     for i in range(0, num_episodes):
-        observation = rgb_frame_to_grayscale(env.reset())
+        init_frame = rgb_frame_to_grayscale(env.reset())
+        observation = np.array([init_frame, init_frame])
         done = False
         print("Episode: {}".format(i))
         while not done:
@@ -134,8 +135,12 @@ def train(net, num_episodes=10, minibatch_size=32, target_network_update_frequen
             print_memory_usage(device)
             # use the current observation to selection an action, run the environment, store the experience
             action = agent.epsilonGreedAction(observation, epsilon=1)
-            result_observation, reward, done, info = env.step(action)
-            result_observation = rgb_frame_to_grayscale(result_observation)
+            result_observation = []
+            for i in range(0, M):
+                new_frame, reward, done, info = env.step(action)
+                new_frame = rgb_frame_to_grayscale(new_frame)
+                result_observation.append(new_frame)
+            result_observation = np.array(result_observation)
             experience = Experience(observation, action, result_observation, reward, done)
             if len(experiences) > D:
                 experiences.pop(0)
