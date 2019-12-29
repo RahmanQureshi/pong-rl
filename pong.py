@@ -28,7 +28,7 @@ D = 10000 # memory buffer size
 minibatch_size = 32
 discount = 0.99
 start_learning_iteration = D # start backprop after this many iterations
-plot_every_num_iterations = int(D/minibatch_size) # after this many iterations, one epoch is complete
+epoch_size = int(D/minibatch_size) # after this many iterations, one epoch is complete
 target_network_update_frequency = 10000 # after learning begins, update the target network after this many iterations
 epsilons = np.linspace(1,0.05,100000) # epsilon annealment. uses the last value after they are all used.
 
@@ -108,19 +108,24 @@ def deep_copy_nets(target_net, net):
         dict_params2[name1].data.copy_(param1.data)
 
 
-def save_net(net):
-    torch.save(net.state_dict(), "./net-" + random_string())
+def save_net(epoch, net, optimizer):
+    torch.save({
+                'epoch': epoch,
+                'model_state_dict': net.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict()
+                }, './net-' + random_string())
 
 
-def get_sigint_handler(net):
+elapsed_epochs = 0 # globally define 
+def get_sigint_handler(net, optimizer):
     def sigint_handler(signal_received, frame):
         print("saving net...")
-        save_net(net)
+        save_net(elapsed_epochs, net, optimizer)
         sys.exit(0)
     return sigint_handler
 
 
-def train(net, minibatch_size=32, target_network_update_frequency=10000):
+def train(net, optimizer, minibatch_size=32, target_network_update_frequency=10000, render=False):
     experiences = []
     env = gym.make('Pong-v0')
     optimizer = optim.SGD(net.parameters(), lr=0.001)
@@ -134,6 +139,7 @@ def train(net, minibatch_size=32, target_network_update_frequency=10000):
     targetAgent = PongAgent(target_net, device)
     lastMFrames = []
     epsilon = None
+    signal(SIGINT, get_sigint_handler(net, optimizer))
     while True:
         init_frame = rgb_frame_to_grayscale(env.reset())
         observation = np.array([init_frame, init_frame])
@@ -177,7 +183,8 @@ def train(net, minibatch_size=32, target_network_update_frequency=10000):
                 optimizer.step()
                 if iteration % target_network_update_frequency == 0:
                     deep_copy_nets(target_net, net)
-                if iteration % plot_every_num_iterations == 0:
+                if iteration % epoch_size == 0:
+                    elapsed_epochs = elapsed_epochs + 1
                     losses.append(loss.item())
                     avg_action_values.append(predictedStateActionValues.mean().item())
                     plt.figure(0)
@@ -195,8 +202,10 @@ args = parser.parse_args()
 
 net_file = args.net_file[0] if len(args.net_file) == 1 else ''
 net = Net()
+optimizer = optim.SGD(net.parameters(), lr=0.001)
 if net_file != '':
-    state_dict = torch.load(net_file)
-    net.load_state_dict(state_dict)
-signal(SIGINT, get_sigint_handler(net))
-train(net, minibatch_size=minibatch_size, target_network_update_frequency=target_network_update_frequency)
+    checkpoint = torch.load(net_file)
+    net.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    elapsed_epochs = checkpoint['epoch']
+train(net, optimizer, minibatch_size=minibatch_size, target_network_update_frequency=target_network_update_frequency, render=args.render)
