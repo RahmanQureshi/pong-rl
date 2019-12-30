@@ -183,6 +183,7 @@ def train(net, optimizer, minibatch_size=32, target_network_update_frequency=100
                 if (iteration-start_learning_iteration) % target_network_update_frequency == 0:
                     deep_copy_nets(target_net, net)
                 if (iteration-start_learning_iteration) % epoch_size == 0:
+                    global elapsed_epochs
                     elapsed_epochs = elapsed_epochs + 1
                     losses.append(loss.item())
                     avg_action_values.append(predictedStateActionValues.mean().item())
