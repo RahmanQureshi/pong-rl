@@ -30,7 +30,7 @@ discount = 0.99
 start_learning_iteration = D # start backprop after this many iterations
 epoch_size = int(D/minibatch_size) # after this many iterations, one epoch is complete
 target_network_update_frequency = 10000 # after learning begins, update the target network after this many iterations
-epsilons = np.linspace(1,0.05,100000) # epsilon annealment. uses the last value after they are all used.
+epsilons = np.linspace(1,0.05,500000) # epsilon annealment. uses the last value after they are all used.
 
 
 class Experience:
@@ -148,7 +148,9 @@ def train(net, optimizer, minibatch_size=32, target_network_update_frequency=100
             print("Iteration {}:".format(iteration))
             print_memory_usage(device)
             # use the current observation to selection an action, run the environment, store the experience
-            if iteration < start_learning_iteration: # before learning, use first epsilon value
+            if render: # if we are rendering, mostly choose the optimal action
+                epsilon = 0.05
+            elif iteration < start_learning_iteration: # before learning, use first epsilon value
                 epsilon = epsilons[0]
             elif iteration-start_learning_iteration < len(epsilons): # annealment
                 epsilon = epsilons[iteration-start_learning_iteration]
