@@ -22,12 +22,14 @@ parser.add_argument('--net_file', metavar='net_file', type=str, nargs=1, default
                     help='file to load the model to be trained')
 parser.add_argument('--render', default=False, action='store_true',
                     help='Render a screen to see the net play')
+parser.add_argument('--headless', default=False, action='store_true',
+                    help='Will save graphs to some path instead of displaying them')
 
 M = 2 # run the game M times and stack the resulting frames to produce the state
-D = 10000 # memory buffer size
+D = 100000 # memory buffer size
 minibatch_size = 32
 discount = 0.99
-start_learning_iteration = D # start backprop after this many iterations
+start_learning_iteration = 50000 # start backprop after this many iterations
 epoch_size = int(D/minibatch_size) # after this many iterations, one epoch is complete
 target_network_update_frequency = 10000 # after learning begins, update the target network after this many iterations
 epsilons = np.linspace(1,0.05,500000) # epsilon annealment. uses the last value after they are all used.
@@ -66,7 +68,9 @@ def print_memory_usage(device):
     process = psutil.Process(os.getpid())
     print("Memory usage (mb): {0}".format(process.memory_info().rss/1e6))
     if device.type == 'cuda':
-        print("GPU Memory Usage: {0}".format(torch.cuda.memory_allocated(device)/1e6))
+        pass
+        # Found that GPU usage is largely negligible (< 200mb)
+        #print("GPU Memory Usage (mb): {0}".format(torch.cuda.memory_allocated(device)/1e6))
 
 
 def create_target(minibatch, targetAgent):
@@ -108,24 +112,29 @@ def deep_copy_nets(target_net, net):
         dict_params2[name1].data.copy_(param1.data)
 
 
-def save_net(epoch, net, optimizer):
+def save_net(net, optimizer):
     torch.save({
-                'epoch': epoch,
                 'model_state_dict': net.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict()
                 }, './net-' + random_string())
 
 
-elapsed_epochs = 0 # globally define 
 def get_sigint_handler(net, optimizer):
     def sigint_handler(signal_received, frame):
         print("saving net...")
-        save_net(elapsed_epochs, net, optimizer)
+        save_net(net, optimizer)
         sys.exit(0)
     return sigint_handler
 
 
-def train(net, optimizer, minibatch_size=32, target_network_update_frequency=10000, render=False):
+def train(args):
+    net = args['net']
+    optmizer = args['optimizer']
+    minibatch_size = args['minibatch_size']
+    target_network_update_frequency = args['target_network_update_frequency']
+    render = args['render']
+    headless = args['headless']
+
     experiences = []
     env = gym.make('Pong-v0')
     losses = []
@@ -179,24 +188,20 @@ def train(net, optimizer, minibatch_size=32, target_network_update_frequency=100
                 optimizer.zero_grad()   # zero the gradient buffers
                 predictedStateActionValues = predictStateActionValues(minibatch, agent, device)
                 loss = torch.sum((targets - predictedStateActionValues)**2)
-                print("Loss: {}".format(loss))
                 loss.backward()
                 optimizer.step()
                 if (iteration-start_learning_iteration) % target_network_update_frequency == 0:
                     deep_copy_nets(target_net, net)
                 if (iteration-start_learning_iteration) % epoch_size == 0:
-                    global elapsed_epochs
-                    elapsed_epochs = elapsed_epochs + 1
-                    losses.append(loss.item())
                     avg_action_values.append(predictedStateActionValues.mean().item())
                     plt.figure(0)
-                    plt.title("loss")
-                    plt.plot(losses)
-                    plt.figure(1)
-                    plt.title("average optimal action value")
+                    plt.title("average state-action value")
                     plt.plot(avg_action_values)
-                    plt.show(block=False)
-                    plt.pause(1)
+                    if headless:
+                        plt.savefig('avg_state_action_val.png')
+                    else:
+                        plt.show(block=False)
+                        plt.pause(0.5)
             iteration = iteration + 1
     env.close()
 
@@ -209,5 +214,13 @@ if net_file != '':
     checkpoint = torch.load(net_file)
     net.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    elapsed_epochs = checkpoint['epoch']
-train(net, optimizer, minibatch_size=minibatch_size, target_network_update_frequency=target_network_update_frequency, render=args.render)
+
+args = {
+    'net': net,
+    'optimizer': optimizer,
+    'minibatch_size': minibatch_size,
+    'target_network_update_frequency': target_network_update_frequency,
+    'render': args.render,
+    'headless': args.headless
+}
+train(args)
