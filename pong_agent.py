@@ -11,15 +11,12 @@ class Net(nn.Module):
         super(Net, self).__init__()
         self.conv1 = nn.Sequential(
             nn.Conv2d(2, 32, 8, stride=4),
-            nn.BatchNorm2d(32),
             nn.ReLU())
         self.conv2 = nn.Sequential(
             nn.Conv2d(32, 64, 4, stride=2),
-            nn.BatchNorm2d(64),
             nn.ReLU())
         self.conv3 = nn.Sequential(
             nn.Conv2d(64, 64, 3, stride=1),
-            nn.BatchNorm2d(64),
             nn.ReLU())
         self.fc1 = nn.Sequential(
             nn.Linear(64 * 22 * 16, 512),

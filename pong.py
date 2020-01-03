@@ -189,6 +189,7 @@ def train(args):
                 predictedStateActionValues = predictStateActionValues(minibatch, agent, device)
                 loss = torch.sum((targets - predictedStateActionValues)**2)
                 loss.backward()
+                print("Loss: {}".format(loss))
                 optimizer.step()
                 if (iteration-start_learning_iteration) % target_network_update_frequency == 0:
                     deep_copy_nets(target_net, net)
@@ -209,7 +210,7 @@ args = parser.parse_args()
 
 net_file = args.net_file[0] if len(args.net_file) == 1 else ''
 net = Net()
-optimizer = optim.SGD(net.parameters(), lr=0.001)
+optimizer = optim.SGD(net.parameters(), lr=0.000001)
 if net_file != '':
     checkpoint = torch.load(net_file)
     net.load_state_dict(checkpoint['model_state_dict'])
