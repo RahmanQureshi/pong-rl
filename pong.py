@@ -170,7 +170,7 @@ def train(args):
                 epsilon = epsilons[-1]
             action = agent.epsilonGreedAction(observation, epsilon=epsilon)
             for i in range(0, M):
-                new_frame, reward, done, info = env.step(0)
+                new_frame, reward, done, info = env.step(action)
                 new_frame = rgb_frame_to_grayscale(new_frame)
                 lastMFrames.pop(0)
                 lastMFrames.append(new_frame)
