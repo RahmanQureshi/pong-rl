@@ -149,9 +149,12 @@ def train(args):
     epsilon = None
     signal(SIGINT, get_sigint_handler(net, optimizer))
     while True:
-        init_frame = rgb_frame_to_grayscale(env.reset())
-        observation = np.array([init_frame, init_frame])
-        observation = torch.from_numpy(observation).view(2, 210, 160).unsqueeze(0)
+        lastMFrames = [rgb_frame_to_grayscale(env.reset())]
+        for i in range(0, M-1):
+            new_frame, _, _, _ = env.step(0) # stay still
+            new_frame = rgb_frame_to_grayscale(new_frame)
+            lastMFrames.append(new_frame)
+        observation = torch.from_numpy(np.array(lastMFrames)).view(M, 210, 160).unsqueeze(0)
         done = False
         while not done:
             print("Iteration {}:".format(iteration))
@@ -166,13 +169,14 @@ def train(args):
             else: # after running out of epsilons, continue to use the last one
                 epsilon = epsilons[-1]
             action = agent.epsilonGreedAction(observation, epsilon=epsilon)
-            result_observation = []
             for i in range(0, M):
-                new_frame, reward, done, info = env.step(action)
+                new_frame, reward, done, info = env.step(0)
                 new_frame = rgb_frame_to_grayscale(new_frame)
-                result_observation.append(new_frame)
-            result_observation = np.array(result_observation)
-            result_observation = torch.from_numpy(result_observation).view(2, 210, 160).unsqueeze(0)
+                lastMFrames.pop(0)
+                lastMFrames.append(new_frame)
+                if reward != 0: # reward means a point was scored. Want that always to be the last frame.
+                    break
+            result_observation = torch.from_numpy(np.array(lastMFrames)).view(M, 210, 160).unsqueeze(0)
             experience = Experience(observation, action, result_observation, reward, done)
             if len(experiences) > D:
                 experiences.pop(0)
