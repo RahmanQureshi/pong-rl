@@ -7,10 +7,10 @@ import numpy as np
 class Net(nn.Module):
 
 
-    def __init__(self):
+    def __init__(self, num_input_channels):
         super(Net, self).__init__()
         self.conv1 = nn.Sequential(
-            nn.Conv2d(2, 32, 8, stride=4),
+            nn.Conv2d(num_input_channels, 32, 8, stride=4),
             nn.ReLU())
         self.conv2 = nn.Sequential(
             nn.Conv2d(32, 64, 4, stride=2),
@@ -19,13 +19,12 @@ class Net(nn.Module):
             nn.Conv2d(64, 64, 3, stride=1),
             nn.ReLU())
         self.fc1 = nn.Sequential(
-            nn.Linear(64 * 22 * 16, 512),
+            nn.Linear(16384, 512),
             nn.ReLU())
         self.fc2 = nn.Linear(512, 6)
 
 
     def forward(self, x):
-        # x.size() => (2, 210, 160)
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.conv3(x)
@@ -63,7 +62,7 @@ class PongAgent:
 
 
     def getOptimalAction(self, x):
-        output = self.net(x.to(self.device).float())
+        output = self.net(x.to(self.device).float()/255.0)
         return output.argmax().item()
 
 
@@ -72,7 +71,7 @@ class PongAgent:
 
 
     def getOptimalActionValue(self, x):
-        output = self.net(x.to(self.device).float())
+        output = self.net(x.to(self.device).float()/255.0)
         return output.max().item()
 
 
@@ -85,7 +84,7 @@ class PongAgent:
     def batchPredict(self, batch):
         """Training purposes only.
         """
-        return self.net(batch.to(self.device).float())
+        return self.net(batch.to(self.device).float()/255.0)
 
 
 if __name__ == "__main__":

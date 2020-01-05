@@ -15,6 +15,7 @@ import string
 import sys
 from signal import signal, SIGINT
 import argparse
+import baselines.common.atari_wrappers as atari_wrappers
 
 
 parser = argparse.ArgumentParser(description='Train a neural net to play pong.')
@@ -25,36 +26,38 @@ parser.add_argument('--render', default=False, action='store_true',
 parser.add_argument('--headless', default=False, action='store_true',
                     help='Will save graphs to some path instead of displaying them')
 
-M = 2 # run the game M times and stack the resulting frames to produce the state
-D = 100000 # memory buffer size
-minibatch_size = 32
+M = 4 # take M steps and stack the resulting frames to produce the state
+D = 10000 # memory buffer size
+minibatch_size = 64 
 discount = 0.99
-start_learning_iteration = 50000 # start backprop after this many iterations
-epoch_size = int(D/minibatch_size) # after this many iterations, one epoch is complete
-target_network_update_frequency = 10000 # after learning begins, update the target network after this many iterations
-epsilons = np.linspace(1,0.05,500000) # epsilon annealment. uses the last value after they are all used.
+start_learning_iteration = 1000 # start backprop after this many iterations
+epoch_size = D/minibatch_size # after this many iterations, one epoch is complete
+target_network_update_frequency = 1000 # after learning begins, update the target network after this many iterations
+epsilons = np.linspace(1,0.02,100000) # epsilon annealment. uses the last value after they are all used.
 
 
 class Experience:
 
 
-    def __init__(self, state, action, result_state, reward, done):
+    def __init__(self, state, action, result_state, reward):
         self.state = state
         self.action = action
         self.result_state = result_state
         self.reward = reward
-        self.done = done
 
 
 def rgb_frame_to_grayscale(frame):
     """Convert rgb to grayscale. Uses observed luminance to compute grey value.
-    Input:
-        numpy array 210x160x3
-    Returns:
-        numpy array 210x160
     """
     rgb = np.array([0.299, 0.587, 0.114])
     return np.inner(rgb, frame).astype(np.uint8)
+
+
+def preprocess_frame(frame):
+    """Applies a preprocess step to 
+    """
+    frame = frame[34:193, :] # just the play area
+    return rgb_frame_to_grayscale(frame)
 
 
 def sample_minibatch(experiences, n):
@@ -76,9 +79,10 @@ def print_memory_usage(device):
 def create_target(minibatch, targetAgent):
     y = []
     for i in range(0, len(minibatch)):
-        if minibatch[i].done:
+        if minibatch[i].reward != 0: # for pong, for training purposes, we defined episode termination when there is a reward
             y.append(minibatch[i].reward)
         else:
+            # technically reward = 0 here but wrote out the full expression as in the paper.
             y.append(minibatch[i].reward + discount*targetAgent.getOptimalActionValue(minibatch[i].result_state))
     return torch.tensor(y)
 
@@ -136,27 +140,30 @@ def train(args):
     headless = args['headless']
 
     experiences = []
-    env = gym.make('Pong-v0')
-    losses = []
-    avg_action_values = []
+    env = gym.make('PongNoFrameskip-v4')
+    env = atari_wrappers.FireResetEnv(env)
+    env = atari_wrappers.NoopResetEnv(env)
     iteration = 0
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     agent = PongAgent(net, device)
-    target_net = Net()
+    target_net = Net(M)
     deep_copy_nets(target_net, net)
     targetAgent = PongAgent(target_net, device)
-    lastMFrames = []
     epsilon = None
     signal(SIGINT, get_sigint_handler(net, optimizer))
-    while True:
-        lastMFrames = [rgb_frame_to_grayscale(env.reset())]
-        for i in range(0, M-1):
+    episode_rewards = []
+    while True: # iterate over multiple episodes until user exits
+        env.reset()
+        episode_reward = 0
+        # create the initial observation
+        lastMFrames = []
+        for i in range(0, M):
             new_frame, _, _, _ = env.step(0) # stay still
-            new_frame = rgb_frame_to_grayscale(new_frame)
+            new_frame = preprocess_frame(new_frame)
             lastMFrames.append(new_frame)
-        observation = torch.from_numpy(np.array(lastMFrames)).view(M, 210, 160).unsqueeze(0)
-        done = False
-        while not done:
+        observation = torch.from_numpy(np.array(lastMFrames)).view(M, 159, 160).unsqueeze(0)
+        done = False # episode not yet complete
+        while not done: # iterate through episode
             print("Iteration {}:".format(iteration))
             print_memory_usage(device)
             # use the current observation to selection an action, run the environment, store the experience
@@ -171,13 +178,18 @@ def train(args):
             action = agent.epsilonGreedAction(observation, epsilon=epsilon)
             for i in range(0, M):
                 new_frame, reward, done, info = env.step(action)
-                new_frame = rgb_frame_to_grayscale(new_frame)
+                if done: # if game is over, frame does not matter
+                    break
+                new_frame = preprocess_frame(new_frame)
                 lastMFrames.pop(0)
                 lastMFrames.append(new_frame)
                 if reward != 0: # reward means a point was scored. Want that always to be the last frame.
+                    episode_reward += reward
                     break
-            result_observation = torch.from_numpy(np.array(lastMFrames)).view(M, 210, 160).unsqueeze(0)
-            experience = Experience(observation, action, result_observation, reward, done)
+            if done: # done occurs right after the last reward. It is an empty frame. No need to add it to memory.
+                break
+            result_observation = torch.from_numpy(np.array(lastMFrames)).view(M, 159, 160).unsqueeze(0)
+            experience = Experience(observation, action, result_observation, reward)
             if len(experiences) > D:
                 experiences.pop(0)
             experiences.append(experience)
@@ -197,24 +209,21 @@ def train(args):
                 optimizer.step()
                 if (iteration-start_learning_iteration) % target_network_update_frequency == 0:
                     deep_copy_nets(target_net, net)
-                if (iteration-start_learning_iteration) % epoch_size == 0:
-                    avg_action_values.append(predictedStateActionValues.mean().item())
-                    plt.figure(0)
-                    plt.title("average state-action value")
-                    plt.plot(avg_action_values)
-                    if headless:
-                        plt.savefig('avg_state_action_val.png')
-                    else:
-                        plt.show(block=False)
-                        plt.pause(0.5)
             iteration = iteration + 1
+        episode_rewards.append(episode_reward)
+        plt.figure(0)
+        plt.title('Reward v.s. Episode #')
+        plt.plot(episode_rewards)
+        plt.show(block=False)
+        plt.pause(0.1)
+
     env.close()
 
 args = parser.parse_args()
 
 net_file = args.net_file[0] if len(args.net_file) == 1 else ''
-net = Net()
-optimizer = optim.SGD(net.parameters(), lr=0.000001)
+net = Net(M)
+optimizer = optim.SGD(net.parameters(), lr=0.005)
 if net_file != '':
     checkpoint = torch.load(net_file)
     net.load_state_dict(checkpoint['model_state_dict'])
