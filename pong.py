@@ -28,7 +28,7 @@ parser.add_argument('--headless', default=False, action='store_true',
 
 M = 4 # take M steps and stack the resulting frames to produce the state
 D = 10000 # memory buffer size
-minibatch_size = 64 
+minibatch_size = 32 
 discount = 0.99
 start_learning_iteration = 1000 # start backprop after this many iterations
 epoch_size = D/minibatch_size # after this many iterations, one epoch is complete
@@ -152,6 +152,7 @@ def train(args):
     epsilon = None
     signal(SIGINT, get_sigint_handler(net, optimizer))
     episode_rewards = []
+    lossfct = torch.nn.SmoothL1Loss()
     while True: # iterate over multiple episodes until user exits
         env.reset()
         episode_reward = 0
@@ -203,7 +204,7 @@ def train(args):
                 targets = create_target(minibatch, targetAgent)
                 optimizer.zero_grad()   # zero the gradient buffers
                 predictedStateActionValues = predictStateActionValues(minibatch, agent, device)
-                loss = torch.sum((targets - predictedStateActionValues)**2)
+                loss = lossfct(predictedStateActionValues, targets)
                 loss.backward()
                 print("Loss: {}".format(loss))
                 optimizer.step()
@@ -223,7 +224,7 @@ args = parser.parse_args()
 
 net_file = args.net_file[0] if len(args.net_file) == 1 else ''
 net = Net(M)
-optimizer = optim.SGD(net.parameters(), lr=0.005)
+optimizer = optim.RMSprop(net.parameters(), lr=0.0025, alpha=0.9, eps=1e-02, momentum=0.0)
 if net_file != '':
     checkpoint = torch.load(net_file)
     net.load_state_dict(checkpoint['model_state_dict'])
