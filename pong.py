@@ -60,13 +60,6 @@ def preprocess_frame(frame):
     return rgb_frame_to_grayscale(frame)
 
 
-def sample_minibatch(experiences, n):
-    minibatch = []
-    for i in range(0, n):
-        minibatch.append(experiences[np.random.randint(0, len(experiences))])
-    return minibatch
-
-
 def print_memory_usage(device):
     process = psutil.Process(os.getpid())
     print("Memory usage (mb): {0}".format(process.memory_info().rss/1e6))
@@ -130,6 +123,26 @@ def get_sigint_handler(net, optimizer):
         sys.exit(0)
     return sigint_handler
 
+class ReplayBuffer:
+    """ReplayBuffer implements a circular buffer. Also implements buffer access methods.
+    """
+
+    def __init__(self, size):
+        self.size = size
+        self.buffer = []
+        self.position = 0 # tracks the oldest element in the array
+
+
+    def push(self, e):
+        if len(self.buffer) < self.size:
+            self.buffer.append(None)
+        self.buffer[self.position] = e
+        self.position = (self.position + 1) % self.size
+
+
+    def sample(self, n):
+        return np.random.choice(self.buffer, n)
+
 
 def train(args):
     net = args['net']
@@ -139,7 +152,6 @@ def train(args):
     render = args['render']
     headless = args['headless']
 
-    experiences = []
     env = gym.make('PongNoFrameskip-v4')
     env = atari_wrappers.FireResetEnv(env)
     env = atari_wrappers.NoopResetEnv(env)
@@ -153,6 +165,7 @@ def train(args):
     signal(SIGINT, get_sigint_handler(net, optimizer))
     episode_rewards = []
     lossfct = torch.nn.SmoothL1Loss()
+    replay_buffer = ReplayBuffer(D)
     while True: # iterate over multiple episodes until user exits
         env.reset()
         episode_reward = 0
@@ -191,16 +204,14 @@ def train(args):
                 break
             result_observation = torch.from_numpy(np.array(lastMFrames)).view(M, 159, 160).unsqueeze(0)
             experience = Experience(observation, action, result_observation, reward)
-            if len(experiences) > D:
-                experiences.pop(0)
-            experiences.append(experience)
+            replay_buffer.push(experience)
             observation = result_observation
             if render:
                 env.render()
                 sleep(0.1)
             # once enough experiences collected, start learning
             if iteration > start_learning_iteration: # only start learning after a number of experiences have been collected
-                minibatch = sample_minibatch(experiences, minibatch_size)
+                minibatch = replay_buffer.sample(minibatch_size)
                 targets = create_target(minibatch, targetAgent)
                 optimizer.zero_grad()   # zero the gradient buffers
                 predictedStateActionValues = predictStateActionValues(minibatch, agent, device)

@@ -50,8 +50,8 @@ class PongAgent:
       1 => still
       2 => up
       3 => down
-      4 => fast up?
-      5 => fast down?
+      4 => up
+      5 => down
     """
 
 
