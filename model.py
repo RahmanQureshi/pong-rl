@@ -21,7 +21,7 @@ class Net(nn.Module):
         self.fc1 = nn.Sequential(
             nn.Linear(16384, 512),
             nn.ReLU())
-        self.fc2 = nn.Linear(512, 6)
+        self.fc2 = nn.Linear(512, 3)
 
 
     def forward(self, x):
@@ -40,51 +40,6 @@ class Net(nn.Module):
         for s in size:
             num_features *= s
         return num_features
-
-
-class PongAgent:
-    """
-    Observation space: Box(210, 160, 3)
-    Action space: Discrete(6)
-      0 => still
-      1 => still
-      2 => up
-      3 => down
-      4 => up
-      5 => down
-    """
-
-
-    def __init__(self, net, device):
-        self.net = net
-        self.device = device
-        self.net.to(self.device)
-
-
-    def getOptimalAction(self, x):
-        output = self.net(x.to(self.device).float()/255.0)
-        return output.argmax().item()
-
-
-    def getRandomAction(self):
-        return np.random.randint(0,6)
-
-
-    def getOptimalActionValue(self, x):
-        output = self.net(x.to(self.device).float()/255.0)
-        return output.max().item()
-
-
-    def epsilonGreedAction(self, x, epsilon=0):
-        if np.random.uniform(0,1) <= epsilon: # with probability epsilon, pick random action
-            return self.getRandomAction()
-        return self.getOptimalAction(x) # with probability 1-epislon, pick optimal action
-
-
-    def batchPredict(self, batch):
-        """Training purposes only.
-        """
-        return self.net(batch.to(self.device).float()/255.0)
 
 
 if __name__ == "__main__":
