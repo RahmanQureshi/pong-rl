@@ -4,6 +4,7 @@
 import gym
 from time import sleep
 from pong_agent import PongAgent, Net
+import copy
 import torch
 import numpy as np
 import torch.optim as optim
@@ -123,8 +124,8 @@ def get_sigint_handler(net, optimizer):
         sys.exit(0)
     return sigint_handler
 
-class ReplayBuffer:
-    """ReplayBuffer implements a circular buffer. Also implements buffer access methods.
+class CircleBuffer:
+    """CircleBuffer implements a circular buffer. Also implements buffer access methods.
     """
 
     def __init__(self, size):
@@ -142,6 +143,84 @@ class ReplayBuffer:
 
     def sample(self, n):
         return np.random.choice(self.buffer, n)
+
+class DeepQLearner:
+
+
+    def __init__(self, net, optimizer, env, action_space, replay_buffer_size=10000):
+        self.net = net
+        self.target_net = copy.deepcopy(self.net)
+        self.replay_buffer = CircleBuffer(replay_buffer_size)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.optimizer = optimizer
+        self.lossfct = torch.nn.SmoothL1Loss()
+        self.env = env
+        self.epsilons = np.linspace(1,0.02,100000) # epsilon annealment. uses the last value after they are all used.
+        self.iterations = 0
+        self.start_learning_iteration = 1000
+        self.action_space = action_space # index of neural network output correspond to these actions
+
+
+    def Q(self, net, x):
+        """ Wrapper around NN forward which turns the tensor to a float type and moves it onto the device.
+            Returns the value of all actions given the state.
+        """
+        return net(x.float().to(self.device))
+
+
+    def max_target_Q(self, x):
+        """Returns max Q(s,a) over all actions for the target neural network.
+        """
+        output = self.Q(self.target_net, x)
+        return output.max().item()
+
+
+    def get_epsilon(self):
+        if self.iteration < self.start_learning_iteration: # before learning, use first epsilon value
+            return epsilons[0]
+        elif self.iteration-self.start_learning_iteration < len(self.epsilons): # annealment
+            return epsilons[self.iteration-self.start_learning_iteration]
+        # after running out of epsilons, continue to use the last one
+        return epsilons[-1]
+
+
+    def epsilon_greedy_action(self, x):
+        epsilon = self.get_epsilon
+        if np.random.uniform(0,1) <= epsilon: # with probability epsilon, pick random action
+            return np.random.choice(self.action_space)
+        return self.action_space[self.Q(x).argmax().item()]
+
+
+    def learn(self, minibatch_size):
+        """DeepQLearner will look over all its experiences and do a single learning iteration step.
+        """
+        minibatch = self.replay_buffer.sample(minibatch_size)
+        # construct the target values
+        targets = [e.reward if e.result_state == None else e.reward + discount*self.max_target_Q(e.result_state) for e in minibatch]
+        # compute the predicted Q values of all the experiences (state and actions taken) in the batch
+        batch_states = torch.tensor([e.state for e in minibatch]) 
+        predicted_Q_values = [q[minibatch[i].action] for (i, q) in enumerate(self.Q(self.net, batch_states))]
+        # backward propagation
+        optimizer.zero_grad()
+        loss = self.lossfct(predicted_Q_values, targets)
+        loss.backward()
+        optimizer.step()
+
+
+    def train(self, num_episodes):
+        for i in range(0, num_episodes):
+            observation = env.reset()
+            done = False
+            while not done:
+                action = self.epsilon_greedy_action(observation)
+                result_observation, reward, done, info = env.step(action)
+                self.iteration = self.iteration + 1
+                self.replay_buffer.push(Experience(observation, action, result_observation, reward))
+                observation = result_observation
+                self.learn()
+
+
+
 
 
 def train(args):
@@ -165,7 +244,7 @@ def train(args):
     signal(SIGINT, get_sigint_handler(net, optimizer))
     episode_rewards = []
     lossfct = torch.nn.SmoothL1Loss()
-    replay_buffer = ReplayBuffer(D)
+    replay_buffer = CircleBuffer(D)
     while True: # iterate over multiple episodes until user exits
         env.reset()
         episode_reward = 0
