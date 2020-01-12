@@ -21,7 +21,15 @@ class PongEnvWrapper(gym.Wrapper):
         return ob
 
     def step(self, action):
-        ob, reward, done, info = self.env.step(action)
+        ob = None
+        total_reward = 0
+        done = False
+        info = None
+        for i in range(0, 4):
+            ob, reward, done, info = self.env.step(action)
+            total_reward = total_reward + reward 
         ob = utils.rgb_to_grayscale(ob) # will return array of shape (210, 160)
         ob = torch.from_numpy(ob).unsqueeze(0) # add back the channel dim
-        return ob, reward, done, info
+        if total_reward != 0: # Treat any reward as terminal. Terminal states have no observation (or don't need them anyway).
+            ob = None
+        return ob, total_reward, done, info
