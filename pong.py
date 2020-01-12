@@ -83,7 +83,7 @@ class CircleBuffer:
 class DeepQLearner:
 
 
-    def __init__(self, net, optimizer, env, action_space, replay_buffer_size=10000):
+    def __init__(self, net, optimizer, env, action_space, replay_buffer_size=10000, render=False):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.net = net
         self.target_net = copy.deepcopy(self.net)
@@ -101,6 +101,7 @@ class DeepQLearner:
         self.action_space = action_space # index of neural network output correspond to these actions
         self.episode_rewards = []
         self.discount = 0.99
+        self.render = render
 
 
     def Q(self, net, x):
@@ -180,9 +181,12 @@ class DeepQLearner:
             while not done:
                 action = self.epsilon_greedy_action(observation)
                 result_observation, reward, done, info = self.env.step(action)
+                if self.render:
+                    self.env.render()
                 self.replay_buffer.push(Experience(observation, action, result_observation, reward))
                 observation = result_observation
                 self.num_env_steps = self.num_env_steps + 1
+                print("NumEnvSteps: {}".format(self.num_env_steps))
                 episode_reward = episode_reward + reward
                 if self.num_env_steps > self.start_learning_iteration:
                     self.learn()
@@ -204,7 +208,7 @@ def train(args):
     env = PongEnvWrapper(env)
     action_space = [1,2,3]
 
-    pong_learner = DeepQLearner(net, optimizer, env, action_space)
+    pong_learner = DeepQLearner(net, optimizer, env, action_space, render=render)
     pong_learner.train(10)
 
     env.close()
