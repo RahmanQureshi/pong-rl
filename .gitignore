@@ -1,4 +1,3 @@
 __pycache__/
-net-*
-dql-*
-
+dql_checkpoint_*
+*.png

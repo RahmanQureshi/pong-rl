@@ -35,6 +35,8 @@ class DeepQLearner:
         self.render = render
         # dummy input is used for convenience when creating target values for a training batch
         self.dummy_input = self.env.reset()
+        # used for saving stats and checkpoint
+        self.rand_string = self.random_string()
 
 
     def learn(self, minibatch_size=32):
@@ -127,9 +129,9 @@ class DeepQLearner:
         plt.figure(0)
         plt.title('Reward v.s. Episode #')
         plt.plot(self.episode_rewards)
-        plt.show(block=False)
-        plt.pause(0.1)
+        plt.savefig('reward_vs_episode_{}.png'.format(self.rand_string))
     
+
     def print_memory_usage(self, device):
         process = psutil.Process(os.getpid())
         print("Memory usage (mb): {0}".format(process.memory_info().rss/1e6))
@@ -138,11 +140,13 @@ class DeepQLearner:
             # Found that GPU usage is largely negligible (< 200mb) for 32 size batch
             #print("GPU Memory Usage (mb): {0}".format(torch.cuda.memory_allocated(device)/1e6))
 
+
     def save(self, net, optimizer):
         torch.save({
                     'model_state_dict': self.net.state_dict(),
                     'optimizer_state_dict': self.optimizer.state_dict()
-                    }, './dql-checkpoint-' + self.random_string())
+                    }, './dql_checkpoint_' + self.rand_string)
+
 
     def random_string(self, string_length=10):
         """Generate_sa random string of fixed length """
