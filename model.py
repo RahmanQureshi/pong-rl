@@ -19,7 +19,7 @@ class Net(nn.Module):
             nn.Conv2d(64, 64, 3, stride=1),
             nn.ReLU())
         self.fc1 = nn.Sequential(
-            nn.Linear(16384, 512),
+            nn.Linear(22528, 512),
             nn.ReLU())
         self.fc2 = nn.Linear(512, 3)
 

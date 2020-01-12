@@ -17,6 +17,7 @@ import sys
 from signal import signal, SIGINT
 import argparse
 import baselines.common.atari_wrappers as atari_wrappers
+from pong_env import PongEnvWrapper
 
 
 parser = argparse.ArgumentParser(description='Train a neural net to play pong.')
@@ -35,19 +36,6 @@ class Experience:
         self.result_state = result_state
         self.reward = reward
 
-
-def rgb_frame_to_grayscale(frame):
-    """Convert rgb to grayscale. Uses observed luminance to compute grey value.
-    """
-    rgb = np.array([0.299, 0.587, 0.114])
-    return np.inner(rgb, frame).astype(np.uint8)
-
-
-def preprocess_frame(frame):
-    """Applies a preprocess step to 
-    """
-    frame = frame[34:193, :] # just the play area
-    return rgb_frame_to_grayscale(frame)
 
 
 def print_memory_usage(device):
@@ -96,10 +84,12 @@ class DeepQLearner:
 
 
     def __init__(self, net, optimizer, env, action_space, replay_buffer_size=10000):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.net = net
         self.target_net = copy.deepcopy(self.net)
+        self.net.to(self.device)
+        self.target_net.to(self.device)
         self.replay_buffer = CircleBuffer(replay_buffer_size)
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.optimizer = optimizer
         self.lossfct = torch.nn.SmoothL1Loss()
         self.env = env
@@ -120,24 +110,17 @@ class DeepQLearner:
         return net(x.float().to(self.device))
 
 
-    def max_target_Q(self, x):
-        """Returns max Q(s,a) over all actions for the target neural network.
-        """
-        output = self.Q(self.target_net, x)
-        return output.max().item()
-
-
     def get_epsilon(self):
-        if self.iteration < self.start_learning_iteration: # before learning, use first epsilon value
-            return epsilons[0]
-        elif self.iteration-self.start_learning_iteration < len(self.epsilons): # annealment
-            return epsilons[self.iteration-self.start_learning_iteration]
+        if self.num_env_steps < self.start_learning_iteration: # before learning, use first epsilon value
+            return self.epsilons[0]
+        elif self.num_env_steps-self.start_learning_iteration < len(self.epsilons): # annealment
+            return self.epsilons[self.num_env_steps-self.start_learning_iteration]
         # after running out of epsilons, continue to use the last one
-        return epsilons[-1]
+        return self.epsilons[-1]
 
 
     def epsilon_greedy_action(self, x):
-        epsilon = self.get_epsilon
+        epsilon = self.get_epsilon()
         if np.random.uniform(0,1) <= epsilon: # with probability epsilon, pick random action
             return np.random.choice(self.action_space)
         return self.action_space[self.Q(x).argmax().item()]
@@ -166,10 +149,14 @@ class DeepQLearner:
         """
         minibatch = self.replay_buffer.sample(minibatch_size)
         # construct the target values
-        targets = [e.reward if e.result_state == None else e.reward + self.discount*self.max_target_Q(e.result_state) for e in minibatch]
+        batch_result_states = torch.stack([e.result_state for e in minibatch])
+        max_target_Q_values = self.Q(self.target_net, batch_result_states).max(dim=1)
+        targets = torch.tensor([e.reward if type(e.result_state) == None else e.reward + self.discount*max_target_Q_values[0][i].item() for i,e in enumerate(minibatch)])
         # compute the predicted Q values of all the experiences (state and actions taken) in the batch
-        batch_states = torch.tensor([e.state for e in minibatch]) 
-        predicted_Q_values = [q[minibatch[i].action] for (i, q) in enumerate(self.Q(self.net, batch_states))]
+        batch_states = torch.stack([e.state for e in minibatch]) 
+        predicted_Q_values = torch.empty(minibatch_size)
+        for i,q in enumerate(self.Q(self.net, batch_states)):
+            predicted_Q_values[i] = q[self.action_space.index(minibatch[i].action)] 
         # backward propagation
         optimizer.zero_grad()
         loss = self.lossfct(predicted_Q_values, targets)
@@ -183,12 +170,12 @@ class DeepQLearner:
 
     def train(self, num_episodes):
         for i in range(0, num_episodes):
-            observation = env.reset()
+            observation = self.env.reset()
             done = False
             episode_reward = 0
             while not done:
                 action = self.epsilon_greedy_action(observation)
-                result_observation, reward, done, info = env.step(action)
+                result_observation, reward, done, info = self.env.step(action)
                 self.replay_buffer.push(Experience(observation, action, result_observation, reward))
                 observation = result_observation
                 self.num_env_steps = self.num_env_steps + 1
@@ -209,6 +196,7 @@ def train(args):
     env = gym.make('PongNoFrameskip-v4')
     env = atari_wrappers.FireResetEnv(env)
     env = atari_wrappers.NoopResetEnv(env)
+    env = PongEnvWrapper(env)
     action_space = [1,2,3]
 
     pong_learner = DeepQLearner(net, optimizer, env, action_space)
