@@ -7,21 +7,26 @@ import psutil
 import os
 import copy
 import matplotlib.pyplot as plt
+import torch.optim as optim
 from circle_buffer import CircleBuffer
 from experience import Experience
+from model import Net
 
 
 class DeepQLearner:
 
 
-    def __init__(self, net, optimizer, env, action_space, replay_buffer_size=10000, render=False):
+    def __init__(self, env, action_space, net=None, optimizer=None, checkpoint='', replay_buffer_size=10000, render=False):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.net = net
+        self.net = Net(1)
+        self.optimizer = optim.RMSprop(self.net.parameters(), lr=0.0025, alpha=0.9, eps=1e-02, momentum=0.0)
+        # if checkpoint is provided, overwrite the state dictionaries of the net and optimizer
+        if checkpoint != '':
+            self.load(checkpoint)
         self.target_net = copy.deepcopy(self.net)
         self.net.to(self.device)
         self.target_net.to(self.device)
         self.replay_buffer = CircleBuffer(replay_buffer_size)
-        self.optimizer = optimizer
         self.lossfct = torch.nn.SmoothL1Loss()
         self.env = env
         self.epsilons = np.linspace(1,0.02,100000) # epsilon annealment. uses the last value after they are all used.
@@ -88,6 +93,7 @@ class DeepQLearner:
             self.save_plots()
             self.save(self.net, self.optimizer)
 
+
     def Q(self, net, x):
         """ Wrapper around NN forward which turns the tensor to a float type and moves it onto the device.
             Returns the value of all actions given the state.
@@ -146,6 +152,11 @@ class DeepQLearner:
                     'model_state_dict': self.net.state_dict(),
                     'optimizer_state_dict': self.optimizer.state_dict()
                     }, './dql_checkpoint_' + self.rand_string)
+
+    def load(self, file):
+        checkpoint = torch.load(file)
+        self.net.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
 
     def random_string(self, string_length=10):
