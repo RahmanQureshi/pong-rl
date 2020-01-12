@@ -31,5 +31,5 @@ class PongEnvWrapper(gym.Wrapper):
         ob = utils.rgb_to_grayscale(ob) # will return array of shape (210, 160)
         ob = torch.from_numpy(ob).unsqueeze(0) # add back the channel dim
         if total_reward != 0: # Treat any reward as terminal. Terminal states have no observation (or don't need them anyway).
-            ob = None
+            info['done'] = True
         return ob, total_reward, done, info

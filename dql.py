@@ -33,6 +33,8 @@ class DeepQLearner:
         self.episode_rewards = []
         self.discount = 0.99
         self.render = render
+        # dummy input is used for convenience when creating target values for a training batch
+        self.dummy_input = self.env.reset()
 
 
     def learn(self, minibatch_size=32):
@@ -42,18 +44,18 @@ class DeepQLearner:
         # construct the target values
         batch_result_states = torch.stack([e.result_state for e in minibatch])
         max_target_Q_values = self.Q(self.target_net, batch_result_states).max(dim=1)
-        targets = torch.tensor([e.reward if type(e.result_state) == None else e.reward + self.discount*max_target_Q_values[0][i].item() for i,e in enumerate(minibatch)])
+        targets = torch.tensor([e.reward if e.terminal else e.reward + self.discount*max_target_Q_values[0][i].item() for i,e in enumerate(minibatch)])
         # compute the predicted Q values of all the experiences (state and actions taken) in the batch
         batch_states = torch.stack([e.state for e in minibatch]) 
         predicted_Q_values = torch.empty(minibatch_size)
         for i,q in enumerate(self.Q(self.net, batch_states)):
             predicted_Q_values[i] = q[self.action_space.index(minibatch[i].action)] 
         # backward propagation
-        optimizer.zero_grad()
+        self.optimizer.zero_grad()
         loss = self.lossfct(predicted_Q_values, targets)
         print("Loss: {}".format(loss))
         loss.backward()
-        optimizer.step()
+        self.optimizer.step()
         self.num_learning_steps = self.num_learning_steps + 1
         if self.num_learning_steps % self.target_network_update_frequency == 0:
             self.deep_copy_nets()
@@ -70,7 +72,8 @@ class DeepQLearner:
                 # To plot while debugging: plt.imshow(result_observation.numpy().squeeze(0))
                 if self.render:
                     self.env.render()
-                self.replay_buffer.push(Experience(observation, action, result_observation, reward))
+                terminal = done or 'done' in info
+                self.replay_buffer.push(Experience(observation, action, result_observation, reward, terminal))
                 observation = result_observation
                 self.num_env_steps = self.num_env_steps + 1
                 print("NumEnvSteps: {}".format(self.num_env_steps))
@@ -139,7 +142,7 @@ class DeepQLearner:
         torch.save({
                     'model_state_dict': self.net.state_dict(),
                     'optimizer_state_dict': self.optimizer.state_dict()
-                    }, './dql-' + self.random_string())
+                    }, './dql-checkpoint-' + self.random_string())
 
     def random_string(self, string_length=10):
         """Generate_sa random string of fixed length """
