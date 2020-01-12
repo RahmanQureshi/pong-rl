@@ -120,10 +120,14 @@ class DeepQLearner:
 
 
     def epsilon_greedy_action(self, x):
+        """Accepts a single state and returns an action based on
+           epsilon greedy exploration v.s. exploitation strategy.
+        """
         epsilon = self.get_epsilon()
         if np.random.uniform(0,1) <= epsilon: # with probability epsilon, pick random action
             return np.random.choice(self.action_space)
-        return self.action_space[self.Q(x).argmax().item()]
+        x = x.unsqueeze(0) # add batch size dimension
+        return self.action_space[self.Q(self.net, x).argmax().item()]
 
 
     def deep_copy_nets(self):
@@ -180,7 +184,8 @@ class DeepQLearner:
                 observation = result_observation
                 self.num_env_steps = self.num_env_steps + 1
                 episode_reward = episode_reward + reward
-                self.learn()
+                if self.num_env_steps > self.start_learning_iteration:
+                    self.learn()
                 print_memory_usage(self.device)
             # Episode is done. Save current status and plots.
             self.episode_rewards.append(episode_reward)
