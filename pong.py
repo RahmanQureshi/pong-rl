@@ -181,6 +181,7 @@ class DeepQLearner:
             while not done:
                 action = self.epsilon_greedy_action(observation)
                 result_observation, reward, done, info = self.env.step(action)
+                # To plot: plt.imshow(result_observation.numpy().squeeze(0))
                 if self.render:
                     self.env.render()
                 self.replay_buffer.push(Experience(observation, action, result_observation, reward))
