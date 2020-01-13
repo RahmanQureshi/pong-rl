@@ -6,6 +6,7 @@ import numpy as np
 import psutil
 import os
 import copy
+from time import sleep
 import matplotlib.pyplot as plt
 import torch.optim as optim
 from circle_buffer import CircleBuffer
@@ -18,7 +19,7 @@ class DeepQLearner:
 
     def __init__(self, env, action_space, net=None, optimizer=None, checkpoint='', replay_buffer_size=10000, render=False):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.net = Net(1)
+        self.net = Net(2)
         self.optimizer = optim.RMSprop(self.net.parameters(), lr=0.0025, alpha=0.9, eps=1e-02, momentum=0.0)
         # if checkpoint is provided, overwrite the state dictionaries of the net and optimizer
         if checkpoint != '':
@@ -79,6 +80,7 @@ class DeepQLearner:
                 # To plot while debugging: plt.imshow(result_observation.numpy().squeeze(0))
                 if self.render:
                     self.env.render()
+                    sleep(0.1)
                 terminal = done or 'done' in info
                 self.replay_buffer.push(Experience(observation, action, result_observation, reward, terminal))
                 observation = result_observation
@@ -90,8 +92,9 @@ class DeepQLearner:
                 self.print_memory_usage(self.device)
             # Episode is done. Save current status and plots.
             self.episode_rewards.append(episode_reward)
-            self.save_plots()
-            self.save(self.net, self.optimizer)
+            if not render:
+                self.save_plots()
+                self.save(self.net, self.optimizer)
 
 
     def Q(self, net, x):
@@ -102,6 +105,8 @@ class DeepQLearner:
 
 
     def get_epsilon(self):
+        if self.render:
+            return 0
         if self.num_env_steps < self.start_learning_iteration: # before learning, use first epsilon value
             return self.epsilons[0]
         elif self.num_env_steps-self.start_learning_iteration < len(self.epsilons): # annealment
