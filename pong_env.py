@@ -17,6 +17,7 @@ class PongEnvWrapper(gym.Wrapper):
     def reset(self, **kwargs):
         ob = self.env.reset(**kwargs)
         ob = utils.rgb_to_grayscale(ob) # will return array of shape (210, 160)
+        ob = ob[34:194, :]
         ob = torch.from_numpy(ob).unsqueeze(0) # add back the channel dim
         return ob
 
@@ -29,6 +30,7 @@ class PongEnvWrapper(gym.Wrapper):
             ob, reward, done, info = self.env.step(action)
             total_reward = total_reward + reward 
         ob = utils.rgb_to_grayscale(ob) # will return array of shape (210, 160)
+        ob = ob[34:194, :]
         ob = torch.from_numpy(ob).unsqueeze(0) # add back the channel dim
         if total_reward != 0: # Treat any reward as terminal. Terminal states have no observation (or don't need them anyway).
             info['done'] = True

@@ -19,12 +19,13 @@ class Net(nn.Module):
             nn.Conv2d(64, 64, 3, stride=1),
             nn.ReLU())
         self.fc1 = nn.Sequential(
-            nn.Linear(22528, 512),
+            nn.Linear(16384, 512),
             nn.ReLU())
         self.fc2 = nn.Linear(512, 3)
 
 
     def forward(self, x):
+        x = x/255.0 # normalize pixel values between [0,1]
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.conv3(x)

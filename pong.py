@@ -28,7 +28,7 @@ def train_pong(args):
     action_space = [1,2,3]
 
     pong_learner = DeepQLearner(env, action_space, checkpoint=checkpoint, render=render)
-    pong_learner.train(10)
+    pong_learner.train(1000)
 
     env.close()
 
