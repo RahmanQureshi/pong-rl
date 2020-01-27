@@ -92,7 +92,7 @@ class DeepQLearner:
                 self.print_memory_usage(self.device)
             # Episode is done. Save current status and plots.
             self.episode_rewards.append(episode_reward)
-            if not render:
+            if not self.render:
                 self.save_plots()
                 self.save(self.net, self.optimizer)
 
