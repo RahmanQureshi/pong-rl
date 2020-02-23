@@ -19,14 +19,15 @@ class DeepQLearner:
 
     def __init__(self, env, action_space, net=None, optimizer=None, checkpoint='', replay_buffer_size=10000, render=False):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.net = Net(2)
-        self.optimizer = optim.RMSprop(self.net.parameters(), lr=0.00025, alpha=0.9, eps=1e-02, momentum=0.95)
         # if checkpoint is provided, overwrite the state dictionaries of the net and optimizer
         if checkpoint != '':
-            self.load(checkpoint)
-        self.target_net = copy.deepcopy(self.net)
-        self.net.to(self.device)
-        self.target_net.to(self.device)
+            self.load(checkpoint, self.device)
+        else:
+            self.net = Net(2)
+            self.optimizer = optim.RMSprop(self.net.parameters(), lr=0.00025, alpha=0.9, eps=1e-02, momentum=0.95)
+            self.target_net = copy.deepcopy(self.net)
+            self.net.to(self.device)
+            self.target_net.to(self.device)
         self.replay_buffer = CircleBuffer(replay_buffer_size)
         self.lossfct = torch.nn.SmoothL1Loss()
         self.env = env
@@ -87,12 +88,12 @@ class DeepQLearner:
                 self.num_env_steps = self.num_env_steps + 1
                 print("NumEnvSteps: {}".format(self.num_env_steps))
                 episode_reward = episode_reward + reward
-                if self.num_env_steps > self.start_learning_iteration:
+                if not self.render and self.num_env_steps > self.start_learning_iteration: # if I am rendering, it is only to watch gameplay
                     self.learn()
                 self.print_memory_usage(self.device)
             # Episode is done. Save current status and plots.
             self.episode_rewards.append(episode_reward)
-            if not self.render:
+            if not self.render: # if I am rendering, it is only for watching the game play for a short while.
                 self.save_plots()
                 self.save(self.net, self.optimizer)
 
@@ -158,10 +159,16 @@ class DeepQLearner:
                     'optimizer_state_dict': self.optimizer.state_dict()
                     }, './dql_checkpoint_' + self.rand_string)
 
-    def load(self, file):
+
+    def load(self, file, device):
         checkpoint = torch.load(file)
+        self.net = Net(2)
         self.net.load_state_dict(checkpoint['model_state_dict'])
+        self.net.to(device)
+        self.optimizer = optim.RMSprop(self.net.parameters(), lr=0.00025, alpha=0.9, eps=1e-02, momentum=0.95)
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.target_net = copy.deepcopy(self.net)
+        self.target_net.to(self.device)
 
 
     def random_string(self, string_length=10):
