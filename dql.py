@@ -20,7 +20,7 @@ class DeepQLearner:
     def __init__(self, env, action_space, net=None, optimizer=None, checkpoint='', replay_buffer_size=10000, render=False):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.net = Net(2)
-        self.optimizer = optim.RMSprop(self.net.parameters(), lr=0.0025, alpha=0.9, eps=1e-02, momentum=0.0)
+        self.optimizer = optim.RMSprop(self.net.parameters(), lr=0.00025, alpha=0.9, eps=1e-02, momentum=0.95)
         # if checkpoint is provided, overwrite the state dictionaries of the net and optimizer
         if checkpoint != '':
             self.load(checkpoint)
@@ -80,7 +80,7 @@ class DeepQLearner:
                 # To plot while debugging: plt.imshow(result_observation.numpy().squeeze(0))
                 if self.render:
                     self.env.render()
-                    sleep(0.1)
+                    sleep(0.05)
                 terminal = done or 'done' in info
                 self.replay_buffer.push(Experience(observation, action, result_observation, reward, terminal))
                 observation = result_observation
